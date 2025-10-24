@@ -26,6 +26,13 @@ void calculate_distribution(int total_items, int num_procs, int item_size,
     }
 }
 
+// Helper function to get the number of items for a specific process
+int get_local_item_count(int total_items, int num_procs, int rank) {
+    int base_items = total_items / num_procs;
+    int extra_items = total_items % num_procs;
+    return base_items + (rank < extra_items ? 1 : 0);
+}
+
 // Helper function to parse integer from string with error checking
 int parse_positive_int(const char *str, const char *name) {
     char *endptr;
@@ -69,7 +76,7 @@ int main(int argc, char *argv[]) {
     R = parse_positive_int(argv[2], "R");
     N = parse_positive_int(argv[3], "N");
     
-    if (M < 0 || R < 0 || N < 0) {
+    if (M == -1 || R == -1 || N == -1) {
         MPI_Finalize();
         return 1;
     }
@@ -137,9 +144,7 @@ int main(int argc, char *argv[]) {
     calculate_distribution(M, size, R, sendcounts, displs);
     
     // Calculate local number of rows for this process
-    int base_rows = M / size;
-    int extra_rows = M % size;
-    local_rows = base_rows + (rank < extra_rows ? 1 : 0);
+    local_rows = get_local_item_count(M, size, rank);
     
     // Allocate memory for local portion of A and C
     local_A = (double *)malloc(local_rows * R * sizeof(double));

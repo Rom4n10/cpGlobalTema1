@@ -1,0 +1,23 @@
+# Archivos compilados
+matrix_mult_mpi
+*.o
+*.out
+
+# Archivos temporales
+*~
+*.swp
+*.swo
+
+# Directorios de construcción
+build/
+dist/
+
+# Archivos de depuración
+core
+*.core
+vgcore.*
+
+# Archivos del editor
+.vscode/
+.idea/
+*.sublime-*

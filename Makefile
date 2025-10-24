@@ -34,10 +34,10 @@ clean:
 # Regla para ejecutar un test básico
 test: $(TARGET)
 	@echo "Ejecutando test con matriz pequeña (8x6 * 6x4)..."
-	mpirun -np 2 ./$(TARGET) 8 6 4
+	mpirun -np 2 --allow-run-as-root ./$(TARGET) 8 6 4
 	@echo ""
 	@echo "Ejecutando test con matriz mediana (100x80 * 80x60)..."
-	mpirun -np 4 ./$(TARGET) 100 80 60
+	mpirun -np 4 --allow-run-as-root --oversubscribe ./$(TARGET) 100 80 60
 
 # Regla de ayuda
 help:

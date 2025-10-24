@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
+#include <errno.h>
+#include <limits.h>
 
 void print_matrix(double *matrix, int rows, int cols, const char *name) {
     printf("\nMatrix %s (%d x %d):\n", name, rows, cols);
@@ -10,6 +12,32 @@ void print_matrix(double *matrix, int rows, int cols, const char *name) {
         }
         printf("\n");
     }
+}
+
+// Helper function to calculate send counts and displacements for load balancing
+void calculate_distribution(int total_items, int num_procs, int item_size, 
+                           int *sendcounts, int *displs) {
+    int base_items = total_items / num_procs;
+    int extra_items = total_items % num_procs;
+    
+    for (int i = 0; i < num_procs; i++) {
+        sendcounts[i] = (base_items + (i < extra_items ? 1 : 0)) * item_size;
+        displs[i] = (i == 0) ? 0 : displs[i-1] + sendcounts[i-1];
+    }
+}
+
+// Helper function to parse integer from string with error checking
+int parse_positive_int(const char *str, const char *name) {
+    char *endptr;
+    errno = 0;
+    long val = strtol(str, &endptr, 10);
+    
+    if (errno != 0 || *endptr != '\0' || val <= 0 || val > INT_MAX) {
+        fprintf(stderr, "Error: Invalid value for %s: '%s'\n", name, str);
+        return -1;
+    }
+    
+    return (int)val;
 }
 
 int main(int argc, char *argv[]) {
@@ -37,14 +65,11 @@ int main(int argc, char *argv[]) {
     }
     
     // Parse dimensions from command line
-    M = atoi(argv[1]);
-    R = atoi(argv[2]);
-    N = atoi(argv[3]);
+    M = parse_positive_int(argv[1], "M");
+    R = parse_positive_int(argv[2], "R");
+    N = parse_positive_int(argv[3], "N");
     
-    if (M <= 0 || R <= 0 || N <= 0) {
-        if (rank == 0) {
-            fprintf(stderr, "Error: All dimensions must be positive integers\n");
-        }
+    if (M < 0 || R < 0 || N < 0) {
         MPI_Finalize();
         return 1;
     }
@@ -108,16 +133,12 @@ int main(int argc, char *argv[]) {
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     
-    // Calculate how many rows each process gets
-    int base_rows = M / size;
-    int extra_rows = M % size;
-    
-    for (int i = 0; i < size; i++) {
-        sendcounts[i] = (base_rows + (i < extra_rows ? 1 : 0)) * R;
-        displs[i] = (i == 0) ? 0 : displs[i-1] + sendcounts[i-1];
-    }
+    // Use helper function to calculate distribution
+    calculate_distribution(M, size, R, sendcounts, displs);
     
     // Calculate local number of rows for this process
+    int base_rows = M / size;
+    int extra_rows = M % size;
     local_rows = base_rows + (rank < extra_rows ? 1 : 0);
     
     // Allocate memory for local portion of A and C
@@ -158,11 +179,8 @@ int main(int argc, char *argv[]) {
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
         
-        for (int i = 0; i < size; i++) {
-            int rows_for_process = base_rows + (i < extra_rows ? 1 : 0);
-            recvcounts[i] = rows_for_process * N;
-            recvdispls[i] = (i == 0) ? 0 : recvdispls[i-1] + recvcounts[i-1];
-        }
+        // Use helper function to calculate distribution for gathering
+        calculate_distribution(M, size, N, recvcounts, recvdispls);
     }
     
     // Gather results into C at process 0
